@@ -1,5 +1,8 @@
 # Monittr #
 
+[![Build Status](https://travis-ci.org/karmi/monittr.png)](https://travis-ci.org/karmi/monittr)
+
+
 Monittr provides a Ruby interface for the [Monit](http://mmonit.com/monit/) systems management system. Its main goal is to aggregate statistics from multiple Monit instances and display them in an attractive web interface.
 
 Monittr loads XML from the [web server embedded in Monit](http://mmonit.com/monit/documentation/monit.html#monit_httpd) and makes it accessible as Ruby objects. It also provides helpers for [Sinatra](http://www.sinatrarb.com/) applications, to display the information as HTML. You can insert the statistics into any page, or create a dedicated one. You can use the default template, or create your own. The default template is located in `lib/monittr/sinatra/template.erb` and pictured below.
