@@ -149,6 +149,7 @@ module Monittr
                  :monitored       => value('monitor',                      :to_i),
                  :pid             => value('pid',                          :to_i),
                  :uptime          => value('uptime',                       :to_i),
+                 :children        => value('children',                     :to_i),
                  :memory          => value('memory/percent',               :to_f),
                  :cpu             => value('cpu/percent',                  :to_i),
                  :total_memory    => value('memory/percenttotal',          :to_f),
