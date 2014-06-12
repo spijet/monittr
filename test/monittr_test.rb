@@ -100,6 +100,17 @@ module Monittr
         assert_equal 0.8, filesystem.inode_percent
       end
 
+      should "return files info" do
+        assert_not_nil @server.files
+        assert_equal 1, @server.files.size
+
+        file = @server.files.first
+        assert_not_nil file
+        assert_equal 0, file.status
+        assert_equal 1, file.monitored
+        assert_equal 5, file.size
+      end
+
       should "return processes info" do
         assert_not_nil @server.processes
         assert_equal 13, @server.processes.size
@@ -124,7 +135,7 @@ module Monittr
 
     end
 
-    [ Services::System, Services::Filesystem, Services::Process ].each do |klass|
+    [ Services::System, Services::File, Services::Filesystem, Services::Process ].each do |klass|
       context "#{klass}" do
         should "deal with invalid XML" do        
           assert_nothing_raised do
