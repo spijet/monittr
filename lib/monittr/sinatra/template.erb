@@ -25,7 +25,7 @@
       </h2>
 
       <div class="content">
-
+        <% if !server.filesystems.empty? %>
         <div class="segment filesystems">
           <h3>Filesystem</h3>
           <ul class="clearfix">
@@ -36,13 +36,15 @@
                 <span class="dot monitored <%= fs.monitored == 1 ? 'running' : 'failure' %>">&middot;</span>
                 <%= fs.name %>
               </strong>
-              <%= fs.percent %>%  
+              <%= fs.percent %>%
             </li>
             <% end %>
           </ul>
           <div class="clear"></div>
         </div><!-- /filesystems -->
+        <% end %>
 
+        <% if !server.files.empty? %>
         <div class="segment files">
           <h3>File</h3>
           <ul class="clearfix">
@@ -55,12 +57,16 @@
               </strong>
               <small>
                 <span class="info"><span class="label">timestamp:</span> <%= timestamp_to_date(f.timestamp) %></span>
+                <span class="info"><span class="label">size:</span> <%= f.size %></span>
               </small>
             </li>
             <% end %>
           </ul>
           <div class="clear"></div>
-        </div><!-- /filesystems -->
+        </div><!-- /files -->
+        <% end %>
+        
+        <% if !server.processes.empty? %>
         <div class="segment processes">
           <h3>Processes</h3>
           <ul>
@@ -83,7 +89,9 @@
           </ul>
           <div class="clear"></div>
         </div><!-- /processes -->
+        <% end %>
 
+        <% if !server.hosts.empty? %>
         <div class="segment hosts">
           <h3>Hosts</h3>
           <ul>
@@ -104,6 +112,7 @@
           </ul>
           <div class="clear"></div>
         </div><!-- /hosts -->
+        <% end %>
 
       </div><!-- /content -->
 
