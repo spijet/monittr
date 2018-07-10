@@ -60,6 +60,31 @@ module Monittr
 
     def inspect
       %Q|<#{self.class} name="#{system.name}" status="#{system.status}" message="#{system.message}">|
+    # Retrieve Monit status XML from the params hash
+    #
+    def self.fetch_by_hash(hostname = 'localhost', port: 2812,
+                           username: 'admin', password: 'monit',
+                           schema: 'http',
+                           ssl_cert: nil, ssl_key: nil, ssl_ca: nil)
+      Timeout::timeout(1) do
+        monit_url  = %(#{schema}://#{username}:#{password}@#{hostname}:#{port}/)
+        monit_url += '_status?format=xml' unless url =~ /_status\?format=xml$/
+
+        if schema == 'https+'
+          new url,
+              RestClient::Resource.new(
+                monit_url,
+                ssl_client_cert: ssl_cert,
+                ssl_client_key: ssl_key,
+                ssl_ca_file: ssl_ca,
+                verify_ssl: OpenSSL::SSL::VERIFY_PEER
+              ).get
+        else
+          new url, RestClient.get(monit_url)
+        end
+      end
+    rescue Exception => e
+      new url, %(<error status="3" name="#{e.class}" message="#{e.message}" />)
     end
 
   end
