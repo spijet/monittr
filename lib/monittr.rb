@@ -1,7 +1,7 @@
 require 'nokogiri'
 require 'rest-client'
-require 'ostruct'
 require 'timeout'
+require 'monittr/services'
 
 module Monittr
   # Represents a cluster of monitored instances.
@@ -10,257 +10,101 @@ module Monittr
   class Cluster
     attr_reader :servers
 
-    def initialize(urls = [])
-      @servers = urls.map { |url| Server.fetch(url) }
+    def initialize(serverlist = [])
+      @servers = serverlist.map { |server| Server.fetch server }
     end
   end
 
   # Represents one monitored instance
   #
   class Server
-    attr_reader :url, :xml, :system, :files, :filesystems, :processes, :hosts
+    attr_reader :server_opts, :xml, :system, :files,
+                :filesystems, :processes, :hosts
 
-    def initialize(url, xml)
-      @url = url
+    def initialize(server_opts, xml)
+      @server_opts = server_opts
       @xml = Nokogiri::XML(xml)
+      @filesystems, @files, @processes, @hosts = [], [], [], []
       if (error = @xml.xpath('error').first)
-        @system = Services::Base.new(
-          name: error.attributes['name'].content,
-          message: error.attributes['message'].content,
-          status: 3
-        )
-        @filesystems = []
-        @files       = []
-        @processes   = []
-        @hosts       = []
+        @system = Services::Base.new({ name: error['name'],
+                                       message: error['message'],
+                                       status: 3 }, skip_fill: true)
       else
-        @system      = Services::System.new(@xml.xpath('//service[@type=5]').first)
-        @filesystems = @xml.xpath('//service[@type=0]').map { |data| Services::Filesystem.new(data) }
-        @files       = @xml.xpath('//service[@type=2]').map { |data| Services::File.new(data) }
-        @processes   = @xml.xpath('//service[@type=3]').map { |data| Services::Process.new(data) }
-        @hosts       = @xml.xpath('//service[@type=4]').map { |data| Services::Host.new(data) }
+        fill_services
       end
     end
 
-    # Retrieve Monit status XML from the URL
-    #
-    def self.fetch_by_url(url = 'http://admin:monit@localhost:2812')
-      Timeout::timeout(1) do
-        monit_url  = url
-        monit_url += '/' unless url =~ %r{/$}
-        monit_url += '_status?format=xml' unless url =~ /_status\?format=xml$/
-        new url, RestClient.get(monit_url)
+    def fill_services
+      service_fields = { 0 => @filesystems, 2 => @files,
+                         3 => @processes, 4 => @hosts }
+
+      @xml.xpath('//service').each do |service|
+        s_type = service['type'].to_i
+        # System service (type == 5) is always the only one, but there may be
+        # many services of other types.
+        if s_type == 5
+          @system = Services::System.new(service)
+        else
+          service_fields[s_type] << Services::SERVICE_TYPES[s_type].new(service)
+        end
       end
-    rescue Exception => e
-      new url, %(<error status="3" name="#{e.class}" message="#{e.message}" />)
+    end
+
+    def self.prepare_restclient_options(server)
+      ssl_opts = server[:ssl_opts]
+      connection_opts = { user: server[:username], password: server[:password] }
+
+      if server[:schema] == 'https' && !ssl_opts.nil?
+        connection_opts.merge!(
+          ssl_client_cert: ssl_opts[:cert], ssl_client_key: ssl_opts[:key],
+          ssl_ca_file: ssl_opts[:ca],
+          verify_ssl: ssl_opts[:verify] ? OpenSSL::SSL::VERIFY_PEER : OpenSSL::SSL::VERIFY_NONE
+        )
+      end
+
+      connection_opts
     end
 
     # Retrieve Monit status XML from the params hash
     #
-    def self.fetch_by_hash(hostname = 'localhost', port: 2812,
-                           username: 'admin', password: 'monit',
-                           schema: 'http',
-                           ssl_cert: nil, ssl_key: nil, ssl_ca: nil)
-      Timeout::timeout(1) do
-        monit_url  = %(#{schema}://#{username}:#{password}@#{hostname}:#{port}/)
-        monit_url += '_status?format=xml' unless url =~ /_status\?format=xml$/
+    def self.fetch(hostname: 'localhost', port: 2812,
+                   username: 'admin', password: 'monit',
+                   schema: 'http', ssl_opts: nil)
+      server = { hostname: hostname, port: port, username: username,
+                 password: password, schema: schema, ssl_opts: ssl_opts }
 
-        if schema == 'https+'
-          new url,
-              RestClient::Resource.new(
-                monit_url,
-                ssl_client_cert: ssl_cert,
-                ssl_client_key: ssl_key,
-                ssl_ca_file: ssl_ca,
-                verify_ssl: OpenSSL::SSL::VERIFY_PEER
-              ).get
-        else
-          new url, RestClient.get(monit_url)
-        end
+      Timeout.timeout(1) do
+        monit_url = %(#{schema}://#{hostname}:#{port}/_status?format=xml)
+        connection_opts = prepare_restclient_options(server)
+
+        new server, RestClient::Resource.new(monit_url, connection_opts).get
       end
     rescue Exception => e
-      new url, %(<error status="3" name="#{e.class}" message="#{e.message}" />)
+      new server,
+          %(<error status="3" name="#{e.class}" message="#{e.message}" />)
     end
 
     def inspect
-      %(<#{self.class} name="#{system.name}" status="#{system.status}" \
-      message="#{system.message}">)
-    end
-  end
-
-  module Services
-    class Base < OpenStruct
-      TYPES = {
-        0 => 'Filesystem',
-        1 => 'Directory',
-        2 => 'File',
-        3 => 'Daemon',
-        4 => 'Connection',
-        5 => 'System'
-      }.freeze
-
-      def load
-        # Note: the `load` gives some headaches, let's be explicit
-        @table[:load]
-      end
-
-      def value(matcher, converter = :to_s)
-        @xml.xpath(matcher).first.content.send(converter)
-      rescue StandardError
-        nil
-      end
-
-      def inspect
-        %(<#{self.class} name="#{name}" status="#{status}" message="#{message}">)
-      end
+      format(
+        %(<%<cls>s name="%<name>s" status="%<status>s" message="%<msg>s">),
+        cls: self.class,
+        name: system.name,
+        status: system.status,
+        msg: system.message
+      )
     end
 
-    # A "system" service in Monit
-    #
-    # <service type="5">
-    #
-    class System < Base
-      def initialize(xml)
-        @xml = xml
-        super(
-          {
-            name:      value('name'),
-            os:        value('//platform/name'),
-            osversion: value('//platform/release'),
-            arch:      value('//platform/machine'),
-            memtotal:  value('//platform/memory',     :to_i),
-            swaptotal: value('//platform/swap',       :to_i),
-            cputotal:  value('//platform/cpu',        :to_i),
-            status:    value('status',                :to_i),
-            monitored: value('monitor',               :to_i),
-            load:      value('system/load/avg01',     :to_f),
-            cpu:       value('system/cpu/user',       :to_f),
-            memory:    value('system/memory/percent', :to_f),
-            swap:      value('system/swap/percent',   :to_f),
-            uptime:    value('//server/uptime',       :to_i)
-          }
-        )
+    def to_h(verbose: false)
+      hash = { name: system.name, status: system.status,
+               system: @system.to_h, files: @files.map(&:to_h),
+               filesystems: @filesystems.map(&:to_h),
+               processes: @processes.map(&:to_h),
+               hosts: @hosts.map(&:to_h) }
+      if verbose
+        hash[:xml] = @xml
+        hash[:server_opts] = @server_opts
       end
-    end
-
-    # A "file" service in Monit
-    #
-    # <service type="2">
-    #
-    class File < Base
-      def initialize(xml)
-        @xml = xml
-        super(
-          {
-            name:      value('name'),
-            status:    value('status',    :to_i),
-            monitored: value('monitor',   :to_i),
-            uid:       value('uid',       :to_i),
-            gid:       value('gid',       :to_i),
-            size:      value('size',      :to_i),
-            timestamp: value('timestamp', :to_i)
-          }
-        )
-      end
-    end
-
-    # A "filesystem" service in Monit
-    #
-    # http://mmonit.com/monit/documentation/monit.html#filesystem_flags_testing
-    #
-    # <service type="0">
-    #
-    class Filesystem < Base
-      def initialize(xml)
-        @xml = xml
-        super(
-          {
-            name:          value('name'),
-            status:        value('status',        :to_i),
-            monitored:     value('monitor',       :to_i),
-            percent:       value('block/percent', :to_f),
-            usage:         value('block/usage'),
-            total:         value('block/total'),
-            inode_percent: value('inode/percent', :to_f),
-            inode_usage:   value('inode/usage'),
-            inode_total:   value('inode/total')
-          }
-        )
-      rescue Exception => e
-        puts "ERROR: #{e.class} -- #{e.message}, In: #{e.backtrace.first}"
-        super(
-          {
-            name:    'Error',
-            status:  3,
-            message: e.message
-          }
-        )
-      end
-    end
-
-    # A "process" service in Monit
-    #
-    # http://mmonit.com/monit/documentation/monit.html#pid_testing
-    #
-    # <service type="3">
-    #
-    class Process < Base
-      def initialize(xml)
-        @xml = xml
-        super(
-          {
-            name:          value('name'),
-            status:        value('status',              :to_i),
-            monitored:     value('monitor',             :to_i),
-            pid:           value('pid',                 :to_i),
-            uptime:        value('uptime',              :to_i),
-            children:      value('children',            :to_i),
-            memory:        value('memory/percent',      :to_f),
-            cpu:           value('cpu/percent',         :to_i),
-            total_memory:  value('memory/percenttotal', :to_f),
-            total_cpu:     value('cpu/percenttotal',    :to_i),
-            response_time: value('port/responsetime',   :to_i)
-          }
-        )
-      rescue Exception => e
-        puts "ERROR: #{e.class} -- #{e.message}, In: #{e.backtrace.first}"
-        super(
-          {
-            name: 'Error',
-            status: 3,
-            message: e.message
-          }
-        )
-      end
-    end
-
-    # A "host" service in Monit
-    #
-    # http://mmonit.com/monit/documentation/monit.html#connection_testing
-    #
-    # <service type="4">
-    #
-    class Host < Base
-      def initialize(xml)
-        @xml = xml
-        super(
-          {
-            name:          value('name'),
-            status:        value('status',  :to_i),
-            monitored:     value('monitor', :to_i),
-            response_time: value('port/responsetime')
-          }
-        )
-      rescue Exception => e
-        puts "ERROR: #{e.class} -- #{e.message}, In: #{e.backtrace.first}"
-        super(
-          {
-            name:    'Error',
-            status:  3,
-            message: e.message
-          }
-        )
-      end
+      hash
     end
   end
 end
