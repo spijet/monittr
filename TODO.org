@@ -1,0 +1,25 @@
+#+TITLE: TODOs list for Monittr
+
+#+TODO: TODO(t) INPROGRESS(p) | DONE(d)
+#+TODO: BUG(b) | FIXED(f)
+#+TODO: | CANCELED(c)
+
+Add your suggestions here!
+
+* INPROGRESS Separate modules/classes properly into files
+* TODO Rewrite tests for new version
+** TODO Figure out how to test SSL
+* TODO Tests for edge cases and weird setups (XML)
+* TODO Pack a gem and post it to RubyGems
+  Should probably change the name too, since the input data format is not
+  backwards-compatible anymore.
+* DONE Add HTTPS support
+  CLOSED: [2018-07-23 Пн 19:30]
+* DONE Add SSL-Client support
+  CLOSED: [2018-07-23 Пн 19:30]
+* Remove all web stuff?
+  I feel like all web-related stuff (like Sinatra templates and whatnot) doesn't
+  belong here. This library is supposed to fetch data from Monit API and give it
+  back to the app that calls it.
+* Remove Monittr::Cluster class
+  Is it really needed?
