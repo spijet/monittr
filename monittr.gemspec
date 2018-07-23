@@ -8,7 +8,7 @@ Gem::Specification.new do |s|
   s.summary       = 'A Ruby and web interface for Monit statistics'
   s.homepage      = 'http://github.com/karmi/monittr'
   s.authors       = ['Karel Minarik', 'Serge Tkatchouk']
-  s.email         = 'karmi@karmi.cz'
+  s.email         = 'sp1j3t@gmail.com'
 
   s.files         = %w[README.markdown Rakefile LICENSE]
   s.files        += Dir.glob('lib/**/*')
