@@ -124,10 +124,12 @@ module Monittr
         [:pid,           'pid',                 :to_i],
         [:uptime,        'uptime',              :to_i],
         [:children,      'children',            :to_i],
-        [:memory,        'memory/percent',      :to_f],
-        [:cpu,           'cpu/percent',         :to_i],
+        [:threads,       'threads',             :to_i],
+        [:mempct,        'memory/percent',      :to_f],
+        [:memory,        'memory/kilobyte',     :to_i],
+        [:cpu,           'cpu/percent',         :to_f],
         [:total_memory,  'memory/percenttotal', :to_f],
-        [:total_cpu,     'cpu/percenttotal',    :to_i],
+        [:total_cpu,     'cpu/percenttotal',    :to_f],
         [:response_time, 'port/responsetime',   :to_f]
       ].freeze
     end
