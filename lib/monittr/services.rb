@@ -98,6 +98,7 @@ module Monittr
     class Filesystem < Base
       FIELDS = [
         [:name,          'name'],
+        [:flags,         'fsflags'],
         [:status,        'status',        :to_i],
         [:monitored,     'monitor',       :to_i],
         [:percent,       'block/percent', :to_f],
