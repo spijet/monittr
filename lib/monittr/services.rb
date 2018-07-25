@@ -3,6 +3,9 @@ require 'ostruct'
 
 module Monittr
   module Services
+    # Basic "skeleton" of Monit service.
+    # Includes all common methods for all services.
+    # Refer to other classes for their respective fieldsets.
     class Base < OpenStruct
       def initialize(data, skip_fill: false)
         if skip_fill
